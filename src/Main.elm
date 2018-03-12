@@ -1,9 +1,20 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Dom
 import Html
 import Html.Styled exposing (..)
-import Html.Styled.Attributes exposing (style, id, multiple, target, type_, value, href, downloadAs, hidden)
+import Html.Styled.Attributes
+    exposing
+        ( style
+        , id
+        , multiple
+        , target
+        , type_
+        , value
+        , href
+        , downloadAs
+        , hidden
+        )
 import Html.Attributes
 import Html.Styled.Events exposing (onInput, onClick)
 import Style
@@ -14,6 +25,9 @@ import Task
 import Base64
 import Dict exposing (Dict, fromList)
 import FileReader exposing (NativeFile)
+
+
+port scrollToId : String -> Cmd msg
 
 
 type alias Model =
@@ -27,7 +41,6 @@ type alias Model =
 type Msg
     = NoOp
     | InputMD String
-    | Move Int
     | MoveUp
     | MoveUpVim
     | MoveDown
@@ -70,13 +83,6 @@ update msg model =
             }
                 ! [ Cmd.none ]
 
-        Move amount ->
-            { model
-                | document =
-                    SelectList.jump amount model.document
-            }
-                ! [ Cmd.none ]
-
         ToggleEdit ->
             { model | editMode = not model.editMode }
                 ! [ focusInput ]
@@ -89,20 +95,20 @@ update msg model =
                 ! [ Cmd.none ]
 
         MoveUp ->
-            move -1 model ! [ Cmd.none ]
+            move -1 model
 
         MoveDown ->
-            move 1 model ! [ Cmd.none ]
+            move 1 model
 
         MoveDownVim ->
             if not model.editMode then
-                move 1 model ! [ Cmd.none ]
+                move 1 model
             else
                 model ! [ Cmd.none ]
 
         MoveUpVim ->
             if not model.editMode then
-                move -1 model ! [ Cmd.none ]
+                move -1 model
             else
                 model ! [ Cmd.none ]
 
@@ -161,12 +167,12 @@ focusInput =
         |> Task.attempt (\_ -> NoOp)
 
 
-move : Int -> Model -> Model
+move : Int -> Model -> ( Model, Cmd Msg )
 move amount model =
     { model
-        | document =
-            SelectList.jump amount model.document
+        | document = SelectList.jump amount model.document
     }
+        ! [ scrollToId "pointer" ]
 
 
 newLine : Model -> Model
@@ -329,7 +335,7 @@ viewPointer isSelected =
     div
         ([ Style.pointer ]
             ++ if isSelected then
-                [ Style.selected ]
+                [ id "pointer", Style.selected ]
                else
                 []
         )
@@ -338,34 +344,39 @@ viewPointer isSelected =
 
 toHtml : String -> Html Msg
 toHtml markdown =
-    Markdown.toHtml [ Html.Attributes.style [ ( "display", "inline" ) ] ] markdown
-        |> fromUnstyled
-
-
-hotkeys : Dict Keyboard.KeyCode Msg
-hotkeys =
-    Dict.fromList
-        [ ( 13, NewLine )
-        , ( 38, MoveUp )
-        , ( 40, MoveDown )
-        , ( 74, MoveDownVim )
-        , ( 75, MoveUpVim )
-        , ( 73, ToggleEditVim )
-        , ( 27, ExitEdit )
+    Markdown.toHtml
+        [ Html.Attributes.style
+            [ ( "display", "inline" )
+            , ( "width", "100%" )
+            ]
         ]
+        markdown
+        |> fromUnstyled
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Keyboard.downs
-        (\key ->
-            case Dict.get key hotkeys of
-                Nothing ->
-                    NoOp
+    let
+        hotkeys =
+            Dict.fromList
+                [ ( 13, NewLine )
+                , ( 38, MoveUp )
+                , ( 40, MoveDown )
+                , ( 74, MoveDownVim )
+                , ( 75, MoveUpVim )
+                , ( 73, ToggleEditVim )
+                , ( 27, ExitEdit )
+                ]
+    in
+        Keyboard.downs
+            (\key ->
+                case Dict.get key hotkeys of
+                    Nothing ->
+                        NoOp
 
-                Just msg ->
-                    msg
-        )
+                    Just msg ->
+                        msg
+            )
 
 
 main : Program Never Model Msg

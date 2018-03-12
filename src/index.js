@@ -3,10 +3,30 @@ import Elm from './Main.elm'
 
 const app = Elm.Main.embed(document.getElementById('main'))
 
-app.ports.export.subscribe((text) => {
-    const data = new Blob([text], {type: 'text/plain'})
-    const objURL = window.URL.createObjectURL(data)
+app.ports.scrollToId.subscribe((id) => {
+    const element = document.getElementById(id)
 
-    const panel = window.open()
-    panel.document.write(`<a href=${objURL} download="export.md">Download link</a>`)
+    if (!element) {
+        return
+    }
+
+    // Delaying scroll to let Elm render elements
+    setTimeout(() => {
+        const viewTop = window.pageYOffset
+        const viewBottom = window.pageYOffset + window.innerHeight
+        const viewHeight = window.innerHeight
+
+        const elementTop = element.offsetTop
+        const elementBottom = element.offsetTop + element.offsetHeight
+
+        const offset = viewHeight / 10 
+
+        if (elementTop < viewTop + offset) {
+            window.scroll(0, elementTop - offset)
+
+        } else if (elementBottom > viewBottom - offset) {
+            window.scroll(0, elementBottom - viewHeight + offset)
+
+        }
+    }, 20)
 })
