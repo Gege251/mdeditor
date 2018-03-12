@@ -3,6 +3,10 @@ module Style exposing (..)
 import Css exposing (..)
 import Html.Styled.Attributes exposing (css)
 import Css.Colors.Mixers as Mixers
+import Css.Colors as Colors
+
+
+-- THEME
 
 
 palette =
@@ -12,6 +16,14 @@ palette =
     , c4 = hex "f4eade"
     , c5 = hex "347c83"
     }
+
+
+fonts =
+    { basic = fontFamilies [ "Arial" ] }
+
+
+
+-- CSS
 
 
 selected =
@@ -25,11 +37,6 @@ line =
         ]
 
 
-input =
-    css
-        [ border (px 0) ]
-
-
 pointer =
     css
         [ width (Css.rem 1), minHeight (Css.rem 1) ]
@@ -37,7 +44,8 @@ pointer =
 
 button =
     css
-        [ border (px 0)
+        [ fonts.basic
+        , border (px 0)
         , backgroundColor palette.c3
         , color palette.c4
         , display inlineBlock
@@ -51,6 +59,15 @@ button =
         ]
 
 
+inputField =
+    css
+        [ width (pct 100)
+        , border (px 0)
+        , backgroundColor (palette.c4)
+        , outline none
+        ]
+
+
 header =
     css
         [ backgroundColor palette.c4 ]
@@ -58,7 +75,8 @@ header =
 
 headerTitle =
     css
-        [ fontSize (em 0.7)
+        [ fonts.basic
+        , fontSize (em 0.7)
         , padding2 (px 0) (em 1.5)
         ]
 
@@ -83,8 +101,8 @@ modal =
         , top (pct 50)
         , left (pct 50)
         , transform (translate2 (pct -50) (pct -50))
-        , backgroundColor (hex "fff")
-        , color (hex "000")
+        , backgroundColor (Colors.white)
+        , color (Colors.black)
         , borderRadius (px 5)
         , boxShadow4 (px 0) (px 0) (px 50) (rgba 0 0 0 0.5)
         ]
@@ -92,34 +110,50 @@ modal =
 
 modalCloseBtn =
     css
-        [ textShadow4 (px 1) (px 1) (px 2) (hex "000")
+        [ fonts.basic
+        , textShadow4 (px 1) (px 1) (px 2) (Colors.black)
         , cursor default
         , padding (em 0.7)
         , hover
-            [ textShadow4 (px 0) (px 0) (px 1) (hex "000")
+            [ textShadow4 (px 0) (px 0) (px 1) (Colors.black)
             ]
         ]
 
 
 modalTitle =
     css
-        [ fontWeight bold ]
+        [ fonts.basic
+        , fontWeight bold
+        ]
 
 
 modalTitleBar =
     css
-        [ backgroundColor (hex "eee")
+        [ backgroundColor (palette.c4)
         , borderRadius4 (px 5) (px 5) (px 0) (px 0)
         , padding (px 5)
         ]
 
 
 modalContent =
-    css [ padding (px 10) ]
+    css
+        [ fonts.basic
+        , padding (px 10)
+        ]
 
 
+modalFooter =
+    css
+        [ fonts.basic ]
 
--- [ position fixed
--- , top (px 10)
--- , left (px 0)
--- ]
+
+divide2 =
+    css [ width (pct 50) ]
+
+
+widthPx pixels =
+    css [ width (px pixels) ]
+
+
+centered =
+    css [ textAlign center ]

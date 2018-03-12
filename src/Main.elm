@@ -35,6 +35,7 @@ type alias Model =
     , editMode : Bool
     , showHelp : Bool
     , showExport : Bool
+    , showAbout : Bool
     }
 
 
@@ -45,6 +46,7 @@ type Msg
     | MoveUpVim
     | MoveDown
     | MoveDownVim
+    | NewDocument
     | ToggleEdit
     | ToggleEditVim
     | ExitEdit
@@ -52,6 +54,7 @@ type Msg
     | DelLine
     | ToggleHelp
     | ToggleExport
+    | ToggleAbout
     | ImportMD (List NativeFile)
     | OnFileLoaded (Result FileReader.Error String)
 
@@ -62,12 +65,18 @@ model =
     , editMode = False
     , showHelp = False
     , showExport = False
+    , showAbout = False
     }
 
 
 init : ( Model, Cmd Msg )
 init =
     model ! [ Cmd.none ]
+
+
+appName : String
+appName =
+    "Markdown Editor 0.1.0"
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -122,11 +131,17 @@ update msg model =
         ExitEdit ->
             { model | editMode = False } ! [ Cmd.none ]
 
+        NewDocument ->
+            { model | document = SelectList.singleton "" } ! [ Cmd.none ]
+
         ToggleHelp ->
             { model | showHelp = not model.showHelp } ! [ Cmd.none ]
 
         ToggleExport ->
             { model | showExport = not model.showExport } ! [ Cmd.none ]
+
+        ToggleAbout ->
+            { model | showAbout = not model.showAbout } ! [ Cmd.none ]
 
         ImportMD files ->
             case files of
@@ -214,6 +229,7 @@ view model =
         [ viewHeader
         , viewExportModal model.showExport model.document
         , viewHelpModal model.showHelp
+        , viewAboutModal model.showAbout
         , viewTextArea model
         ]
 
@@ -221,7 +237,8 @@ view model =
 viewHeader : Html Msg
 viewHeader =
     div [ Style.header ]
-        [ span [ Style.headerTitle ] [ text "Markdown Editor 0.1" ]
+        [ span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
+        , a [ Style.button, onClick NewDocument ] [ text "New Document" ]
         , a [ Style.button, onClick ToggleEdit ] [ text "Edit Mode" ]
         , a [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
         , a [ Style.button, onClick ToggleHelp ] [ text "Help" ]
@@ -237,8 +254,8 @@ viewHelpModal show =
             , ( "i", "Switch to edit mode" )
             , ( "Esc", "Exit edit mode" )
             ]
-    in
-        viewModal "Help" show ToggleHelp <|
+
+        content =
             table [] <|
                 List.map
                     (\( key, command ) ->
@@ -249,6 +266,28 @@ viewHelpModal show =
                     )
                     keys
 
+        footer =
+            text ""
+    in
+        viewModal "Help" show ToggleHelp content footer
+
+
+viewAboutModal : Bool -> Html Msg
+viewAboutModal show =
+    let
+        content =
+            div []
+                [ h2 [] [ text appName ]
+                , div [] [ text "by Szabo Gergely" ]
+                , a [ href "https://github.com/gege251/mdeditor", target "_blank" ]
+                    [ text "https://github.com/gege251/mdeditor" ]
+                ]
+
+        footer =
+            text ""
+    in
+        viewModal appName show ToggleAbout content footer
+
 
 onFileChange : (List NativeFile -> Msg) -> Html.Styled.Attribute Msg
 onFileChange msg =
@@ -257,31 +296,40 @@ onFileChange msg =
 
 viewExportModal : Bool -> SelectList String -> Html Msg
 viewExportModal show document =
-    viewModal "Import/Export" show ToggleExport <|
-        div []
-            [ label
-                [ Style.button ]
-                [ input
-                    [ type_ "file"
-                    , hidden True
-                    , onFileChange ImportMD
-                    , multiple False
+    let
+        content =
+            div [ Style.widthPx 300, Style.centered ]
+                [ text "Warning! If you import a new file, all your changes will be lost!"
+                ]
+
+        footer =
+            div []
+                [ label
+                    [ Style.button, Style.divide2 ]
+                    [ input
+                        [ type_ "file"
+                        , hidden True
+                        , onFileChange ImportMD
+                        , multiple False
+                        ]
+                        []
+                    , text "Import"
                     ]
-                    []
-                , text "Import"
+                , a
+                    [ Style.button
+                    , Style.divide2
+                    , href ((serialize >> mkDataURI) document)
+                    , downloadAs "export.md"
+                    , onClick ToggleExport
+                    ]
+                    [ text "Export" ]
                 ]
-            , a
-                [ Style.button
-                , href ((serialize >> mkDataURI) document)
-                , downloadAs "export.md"
-                , onClick ToggleExport
-                ]
-                [ text "Export" ]
-            ]
+    in
+        viewModal "Import/Export" show ToggleExport content footer
 
 
-viewModal : String -> Bool -> Msg -> Html Msg -> Html Msg
-viewModal title show closeMsg content =
+viewModal : String -> Bool -> Msg -> Html Msg -> Html Msg -> Html Msg
+viewModal title show closeMsg content footer =
     if show then
         div [ Style.overlay ]
             [ div [ Style.modal ]
@@ -290,6 +338,7 @@ viewModal title show closeMsg content =
                     , span [ Style.modalTitle ] [ text title ]
                     ]
                 , div [ Style.modalContent ] [ content ]
+                , div [ Style.modalFooter ] [ footer ]
                 ]
             ]
     else
@@ -315,7 +364,11 @@ viewTextArea model =
               in
                 if model.editMode then
                     input
-                        [ id "lineinput", value current, onInput InputMD ]
+                        [ Style.inputField
+                        , id "lineinput"
+                        , value current
+                        , onInput InputMD
+                        ]
                         []
                 else
                     toHtml current
