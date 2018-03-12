@@ -3,24 +3,13 @@ port module Main exposing (..)
 import Dom
 import Html
 import Html.Styled exposing (..)
-import Html.Styled.Attributes
-    exposing
-        ( style
-        , id
-        , multiple
-        , target
-        , type_
-        , value
-        , href
-        , downloadAs
-        , hidden
-        )
+import Html.Styled.Attributes exposing (..)
 import Html.Attributes
-import Html.Styled.Events exposing (onInput, onClick)
+import Html.Styled.Events exposing (..)
 import Style
 import Markdown
 import SelectList exposing (SelectList)
-import Keyboard
+import Keyboard exposing (KeyCode)
 import Task
 import Base64
 import Dict exposing (Dict, fromList)
@@ -36,6 +25,7 @@ type alias Model =
     , showHelp : Bool
     , showExport : Bool
     , showAbout : Bool
+    , lastKey : Maybe KeyCode
     }
 
 
@@ -43,13 +33,9 @@ type Msg
     = NoOp
     | InputMD String
     | MoveUp
-    | MoveUpVim
     | MoveDown
-    | MoveDownVim
     | NewDocument
     | ToggleEdit
-    | ToggleEditVim
-    | ExitEdit
     | NewLine
     | DelLine
     | ToggleHelp
@@ -57,6 +43,7 @@ type Msg
     | ToggleAbout
     | ImportMD (List NativeFile)
     | OnFileLoaded (Result FileReader.Error String)
+    | KeyDown KeyCode
 
 
 model : Model
@@ -66,6 +53,7 @@ model =
     , showHelp = False
     , showExport = False
     , showAbout = False
+    , lastKey = Nothing
     }
 
 
@@ -109,28 +97,6 @@ update msg model =
         MoveDown ->
             move 1 model
 
-        MoveDownVim ->
-            if not model.editMode then
-                move 1 model
-            else
-                model ! [ Cmd.none ]
-
-        MoveUpVim ->
-            if not model.editMode then
-                move -1 model
-            else
-                model ! [ Cmd.none ]
-
-        ToggleEditVim ->
-            if not model.editMode then
-                { model | editMode = True }
-                    ! [ focusInput ]
-            else
-                model ! [ Cmd.none ]
-
-        ExitEdit ->
-            { model | editMode = False } ! [ Cmd.none ]
-
         NewDocument ->
             { model | document = SelectList.singleton "" } ! [ Cmd.none ]
 
@@ -167,6 +133,60 @@ update msg model =
                                 model ! [ Cmd.none ]
 
                 Err err ->
+                    model ! [ Cmd.none ]
+
+        KeyDown keyCode ->
+            case keyCode of
+                -- enter
+                13 ->
+                    newLine model ! [ Cmd.none ]
+
+                -- up arrow
+                38 ->
+                    move -1 model
+
+                -- down arrow
+                40 ->
+                    move 1 model
+
+                -- j (move down)
+                74 ->
+                    if not model.editMode then
+                        move 1 model
+                    else
+                        model ! [ Cmd.none ]
+
+                -- k (move up)
+                75 ->
+                    if not model.editMode then
+                        move -1 model
+                    else
+                        model ! [ Cmd.none ]
+
+                -- d (delete line)
+                68 ->
+                    if model.lastKey == Just 68 then
+                        { model
+                            | lastKey = Nothing
+                            , document = SelectList.removeCurrent model.document
+                        }
+                            ! [ Cmd.none ]
+                    else
+                        { model | lastKey = Just 68 } ! [ Cmd.none ]
+
+                -- i (edit mode on)
+                73 ->
+                    if not model.editMode then
+                        { model | editMode = True }
+                            ! [ focusInput ]
+                    else
+                        model ! [ Cmd.none ]
+
+                -- Esc (edit mode off)
+                27 ->
+                    { model | editMode = False } ! [ Cmd.none ]
+
+                _ ->
                     model ! [ Cmd.none ]
 
 
@@ -251,6 +271,7 @@ viewHelpModal show =
         keys =
             [ ( "j", "Move down" )
             , ( "k", "Move up" )
+            , ( "d (twice)", "Delete line" )
             , ( "i", "Switch to edit mode" )
             , ( "Esc", "Exit edit mode" )
             ]
@@ -404,32 +425,12 @@ toHtml markdown =
             ]
         ]
         markdown
-        |> fromUnstyled
+        |> Html.Styled.fromUnstyled
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        hotkeys =
-            Dict.fromList
-                [ ( 13, NewLine )
-                , ( 38, MoveUp )
-                , ( 40, MoveDown )
-                , ( 74, MoveDownVim )
-                , ( 75, MoveUpVim )
-                , ( 73, ToggleEditVim )
-                , ( 27, ExitEdit )
-                ]
-    in
-        Keyboard.downs
-            (\key ->
-                case Dict.get key hotkeys of
-                    Nothing ->
-                        NoOp
-
-                    Just msg ->
-                        msg
-            )
+    Keyboard.downs KeyDown
 
 
 main : Program Never Model Msg
