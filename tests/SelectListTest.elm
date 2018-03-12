@@ -138,7 +138,7 @@ suite =
                     expected =
                         { preceding = [ "previous" ]
                         , current = "current"
-                        , following = [ "next", "new" ]
+                        , following = [ "new", "next" ]
                         }
                 in
                     mock
@@ -148,7 +148,7 @@ suite =
             \_ ->
                 let
                     expected =
-                        { preceding = [ "previous", "new" ]
+                        { preceding = [ "new", "previous" ]
                         , current = "current"
                         , following = [ "next" ]
                         }

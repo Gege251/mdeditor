@@ -85,12 +85,12 @@ jump amount slist =
 
 append : a -> SelectList a -> SelectList a
 append elem slist =
-    { slist | following = slist.following ++ [ elem ] }
+    { slist | following = elem :: slist.following }
 
 
 prepend : a -> SelectList a -> SelectList a
 prepend elem slist =
-    { slist | preceding = slist.preceding ++ [ elem ] }
+    { slist | preceding = elem :: slist.preceding }
 
 
 size : SelectList a -> Int
