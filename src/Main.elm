@@ -76,7 +76,7 @@ init =
 
 appName : String
 appName =
-    "Markdown Editor 0.1.0"
+    "Markdown Editor 0.0.1"
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
