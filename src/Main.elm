@@ -136,58 +136,62 @@ update msg model =
                     model ! [ Cmd.none ]
 
         KeyDown keyCode ->
-            case keyCode of
-                -- enter
-                13 ->
-                    newLine model ! [ Cmd.none ]
+            let
+                modelLastKeyReset =
+                    { model | lastKey = Nothing }
+            in
+                case keyCode of
+                    -- enter
+                    13 ->
+                        newLine modelLastKeyReset ! [ Cmd.none ]
 
-                -- up arrow
-                38 ->
-                    move -1 model
+                    -- up arrow
+                    38 ->
+                        move -1 modelLastKeyReset
 
-                -- down arrow
-                40 ->
-                    move 1 model
+                    -- down arrow
+                    40 ->
+                        move 1 modelLastKeyReset
 
-                -- j (move down)
-                74 ->
-                    if not model.editMode then
-                        move 1 model
-                    else
-                        model ! [ Cmd.none ]
+                    -- j (move down)
+                    74 ->
+                        if not model.editMode then
+                            move 1 modelLastKeyReset
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
 
-                -- k (move up)
-                75 ->
-                    if not model.editMode then
-                        move -1 model
-                    else
-                        model ! [ Cmd.none ]
+                    -- k (move up)
+                    75 ->
+                        if not model.editMode then
+                            move -1 modelLastKeyReset
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
 
-                -- d (delete line)
-                68 ->
-                    if model.lastKey == Just 68 then
-                        { model
-                            | lastKey = Nothing
-                            , document = SelectList.removeCurrent model.document
-                        }
-                            ! [ Cmd.none ]
-                    else
-                        { model | lastKey = Just 68 } ! [ Cmd.none ]
+                    -- d (delete line)
+                    68 ->
+                        if model.lastKey == Just 68 then
+                            { modelLastKeyReset
+                                | document =
+                                    SelectList.removeCurrent model.document
+                            }
+                                ! [ Cmd.none ]
+                        else
+                            { modelLastKeyReset | lastKey = Just 68 } ! [ Cmd.none ]
 
-                -- i (edit mode on)
-                73 ->
-                    if not model.editMode then
-                        { model | editMode = True }
-                            ! [ focusInput ]
-                    else
-                        model ! [ Cmd.none ]
+                    -- i (edit mode on)
+                    73 ->
+                        if not model.editMode then
+                            { modelLastKeyReset | editMode = True }
+                                ! [ focusInput ]
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
 
-                -- Esc (edit mode off)
-                27 ->
-                    { model | editMode = False } ! [ Cmd.none ]
+                    -- Esc (edit mode off)
+                    27 ->
+                        { modelLastKeyReset | editMode = False } ! [ Cmd.none ]
 
-                _ ->
-                    model ! [ Cmd.none ]
+                    _ ->
+                        modelLastKeyReset ! [ Cmd.none ]
 
 
 getFileContents : NativeFile -> Cmd Msg
