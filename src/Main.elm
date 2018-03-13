@@ -411,7 +411,7 @@ viewPointer isSelected =
             ++ if isSelected then
                 [ id "pointer", Style.selected ]
                else
-                []
+                [ Style.deselected ]
         )
         [ text " " ]
 

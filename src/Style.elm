@@ -30,6 +30,10 @@ selected =
     css [ backgroundColor palette.c5 ]
 
 
+deselected =
+    css [ backgroundColor (Mixers.lighten 70 palette.c4) ]
+
+
 line =
     css
         [ displayFlex
