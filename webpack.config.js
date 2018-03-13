@@ -5,7 +5,7 @@ const UglifyJSWebpackPlugin = require('uglifyjs-webpack-plugin');
 
 const cleanPlugin    = new CleanWebpackPlugin('dist');
 const htmlPlugin     = new HtmlWebpackPlugin({
-    title : 'Todo App',
+    title : 'Markdown Editor',
     template : 'src/index.html'
 });
 const uglifyjsPlugin = new UglifyJSWebpackPlugin();
