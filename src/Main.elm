@@ -10,13 +10,28 @@ import Style
 import Markdown
 import SelectList exposing (SelectList)
 import Keyboard exposing (KeyCode)
+import Process
 import Task
 import Base64
 import Dict exposing (Dict, fromList)
 import FileReader exposing (NativeFile)
+import Json.Decode as Decode exposing (Value)
+import Json.Decode.Pipeline as Pipeline
 
 
 port scrollToId : String -> Cmd msg
+
+
+port localStorageSet : ( String, String ) -> Cmd msg
+
+
+port localStorageGet : String -> Cmd msg
+
+
+port localStorageRemove : String -> Cmd msg
+
+
+port onLocalStorageResponse : (Value -> msg) -> Sub msg
 
 
 type alias Model =
@@ -25,6 +40,7 @@ type alias Model =
     , showHelp : Bool
     , showExport : Bool
     , showAbout : Bool
+    , notificationSaved : Bool
     , lastKey : Maybe KeyCode
     }
 
@@ -41,9 +57,18 @@ type Msg
     | ToggleHelp
     | ToggleExport
     | ToggleAbout
+    | NotificationFade
     | ImportMD (List NativeFile)
     | OnFileLoaded (Result FileReader.Error String)
     | KeyDown KeyCode
+    | SaveToLocalStorage
+    | OnLocalStorageResponse LocalStorageItem
+
+
+type alias LocalStorageItem =
+    { key : String
+    , value : Maybe String
+    }
 
 
 model : Model
@@ -53,13 +78,14 @@ model =
     , showHelp = False
     , showExport = False
     , showAbout = False
+    , notificationSaved = False
     , lastKey = Nothing
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    model ! [ Cmd.none ]
+    model ! [ localStorageGet "document" ]
 
 
 appName : String
@@ -133,6 +159,34 @@ update msg model =
                                 model ! [ Cmd.none ]
 
                 Err err ->
+                    model ! [ Cmd.none ]
+
+        SaveToLocalStorage ->
+            { model | notificationSaved = True }
+                ! [ Cmd.batch
+                        [ model.document
+                            |> serialize
+                            |> (,) "document"
+                            |> localStorageSet
+                        , Process.sleep 1000
+                            |> Task.perform (\_ -> NotificationFade)
+                        ]
+                  ]
+
+        NotificationFade ->
+            { model | notificationSaved = False } ! [ Cmd.none ]
+
+        OnLocalStorageResponse { key, value } ->
+            case key of
+                "document" ->
+                    case value |> Maybe.andThen deserialize of
+                        Just document ->
+                            { model | document = document } ! [ Cmd.none ]
+
+                        Nothing ->
+                            model ! [ Cmd.none ]
+
+                otherwise ->
                     model ! [ Cmd.none ]
 
         KeyDown keyCode ->
@@ -250,7 +304,7 @@ view : Model -> Html Msg
 view model =
     div
         []
-        [ viewHeader
+        [ viewHeader model.notificationSaved
         , viewExportModal model.showExport model.document
         , viewHelpModal model.showHelp
         , viewAboutModal model.showAbout
@@ -258,14 +312,26 @@ view model =
         ]
 
 
-viewHeader : Html Msg
-viewHeader =
+viewHeader : Bool -> Html Msg
+viewHeader notification =
     div [ Style.header ]
         [ span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
         , a [ Style.button, onClick NewDocument ] [ text "New Document" ]
-        , a [ Style.button, onClick ToggleEdit ] [ text "Edit Mode" ]
+        , a [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
         , a [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
+        , a [ Style.button, onClick ToggleEdit ] [ text "Edit Mode" ]
         , a [ Style.button, onClick ToggleHelp ] [ text "Help" ]
+        , viewNotifications notification
+        ]
+
+
+viewNotifications : Bool -> Html Msg
+viewNotifications notification =
+    span [ Style.headerTitle ]
+        [ if notification then
+            text "Saved."
+          else
+            text ""
         ]
 
 
@@ -434,7 +500,26 @@ toHtml markdown =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Keyboard.downs KeyDown
+    Sub.batch
+        [ Keyboard.downs KeyDown
+        , onLocalStorageResponse decodeLocalStorage
+        ]
+
+
+decodeLocalStorage : Value -> Msg
+decodeLocalStorage val =
+    let
+        decoder =
+            Pipeline.decode LocalStorageItem
+                |> Pipeline.required "key" Decode.string
+                |> Pipeline.required "value" (Decode.nullable Decode.string)
+    in
+        case Decode.decodeValue decoder val of
+            Ok storage ->
+                OnLocalStorageResponse storage
+
+            otherwise ->
+                NoOp
 
 
 main : Program Never Model Msg
