@@ -40,7 +40,7 @@ type alias Model =
     , showHelp : Bool
     , showExport : Bool
     , showAbout : Bool
-    , notificationSaved : Bool
+    , notifications : List Notification
     , lastKey : Maybe KeyCode
     }
 
@@ -57,12 +57,17 @@ type Msg
     | ToggleHelp
     | ToggleExport
     | ToggleAbout
-    | NotificationFade
+    | NotificationFade Notification
     | ImportMD (List NativeFile)
     | OnFileLoaded (Result FileReader.Error String)
     | KeyDown KeyCode
     | SaveToLocalStorage
     | OnLocalStorageResponse LocalStorageItem
+
+
+type Notification
+    = Saved
+    | Imported
 
 
 type alias LocalStorageItem =
@@ -78,7 +83,7 @@ model =
     , showHelp = False
     , showExport = False
     , showAbout = False
-    , notificationSaved = False
+    , notifications = []
     , lastKey = Nothing
     }
 
@@ -138,7 +143,12 @@ update msg model =
         ImportMD files ->
             case files of
                 [ a ] ->
-                    model ! [ getFileContents a ]
+                    { model | notifications = Imported :: model.notifications }
+                        ! [ Cmd.batch
+                                [ getFileContents a
+                                , notificationTimer Imported
+                                ]
+                          ]
 
                 _ ->
                     model ! [ Cmd.none ]
@@ -162,19 +172,22 @@ update msg model =
                     model ! [ Cmd.none ]
 
         SaveToLocalStorage ->
-            { model | notificationSaved = True }
+            { model | notifications = Saved :: model.notifications }
                 ! [ Cmd.batch
                         [ model.document
                             |> serialize
                             |> (,) "document"
                             |> localStorageSet
-                        , Process.sleep 1000
-                            |> Task.perform (\_ -> NotificationFade)
+                        , notificationTimer Saved
                         ]
                   ]
 
-        NotificationFade ->
-            { model | notificationSaved = False } ! [ Cmd.none ]
+        NotificationFade notification ->
+            let
+                filtered =
+                    List.filter (\n -> n /= notification) model.notifications
+            in
+                { model | notifications = filtered } ! [ Cmd.none ]
 
         OnLocalStorageResponse { key, value } ->
             case key of
@@ -254,6 +267,12 @@ getFileContents file =
         |> Task.attempt OnFileLoaded
 
 
+notificationTimer : Notification -> Cmd Msg
+notificationTimer notification =
+    Process.sleep 1000
+        |> Task.perform (\_ -> NotificationFade notification)
+
+
 focusInput : Cmd Msg
 focusInput =
     Dom.focus "lineinput"
@@ -304,7 +323,7 @@ view : Model -> Html Msg
 view model =
     div
         []
-        [ viewHeader model.notificationSaved
+        [ viewHeader model.notifications
         , viewExportModal model.showExport model.document
         , viewHelpModal model.showHelp
         , viewAboutModal model.showAbout
@@ -312,8 +331,8 @@ view model =
         ]
 
 
-viewHeader : Bool -> Html Msg
-viewHeader notification =
+viewHeader : List Notification -> Html Msg
+viewHeader notifications =
     div [ Style.header ]
         [ span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
         , a [ Style.button, onClick NewDocument ] [ text "New Document" ]
@@ -321,18 +340,18 @@ viewHeader notification =
         , a [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
         , a [ Style.button, onClick ToggleEdit ] [ text "Edit Mode" ]
         , a [ Style.button, onClick ToggleHelp ] [ text "Help" ]
-        , viewNotifications notification
+        , span [ Style.headerTitle ] <| List.map viewNotification notifications
         ]
 
 
-viewNotifications : Bool -> Html Msg
-viewNotifications notification =
-    span [ Style.headerTitle ]
-        [ if notification then
+viewNotification : Notification -> Html Msg
+viewNotification notification =
+    case notification of
+        Saved ->
             text "Saved."
-          else
-            text ""
-        ]
+
+        Imported ->
+            text "Imported."
 
 
 viewHelpModal : Bool -> Html Msg
