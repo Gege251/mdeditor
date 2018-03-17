@@ -30,7 +30,7 @@ app.ports.scrollToId.subscribe(id => {
   }, 20);
 });
 
-app.ports.localStorageSet.subscribe(([key, value]) => {
+app.ports.localStorageSet.subscribe(({key, value}) => {
   window.localStorage.setItem(key, value);
 });
 

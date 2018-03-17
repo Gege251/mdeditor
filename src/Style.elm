@@ -58,6 +58,7 @@ button =
         , fontSize (em 0.8)
         , cursor default
         , padding (em 0.5)
+        , outline none
         , hover
             [ backgroundColor (Mixers.darken 10 palette.c3) ]
         ]
@@ -161,3 +162,7 @@ widthPx pixels =
 
 centered =
     css [ textAlign center ]
+
+
+highlight =
+    css [ important <| backgroundColor (Mixers.lighten 40 palette.c3) ]

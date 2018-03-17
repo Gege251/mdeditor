@@ -6,6 +6,7 @@ import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Attributes
 import Html.Styled.Events exposing (..)
+import Maybe.Extra
 import Style
 import Markdown
 import SelectList exposing (SelectList)
@@ -22,7 +23,7 @@ import Json.Decode.Pipeline as Pipeline
 port scrollToId : String -> Cmd msg
 
 
-port localStorageSet : ( String, String ) -> Cmd msg
+port localStorageSet : LocalStorageItem -> Cmd msg
 
 
 port localStorageGet : String -> Cmd msg
@@ -34,14 +35,26 @@ port localStorageRemove : String -> Cmd msg
 port onLocalStorageResponse : (Value -> msg) -> Sub msg
 
 
+type ViewMode
+    = Show ShowMode
+    | Edit
+
+
+type ShowMode
+    = Markdown
+    | Compiled
+
+
 type alias Model =
     { document : SelectList String
     , editMode : Bool
+    , viewMode : ViewMode
     , showHelp : Bool
     , showExport : Bool
     , showAbout : Bool
     , notifications : List Notification
     , lastKey : Maybe KeyCode
+    , clipboard : String
     }
 
 
@@ -52,8 +65,10 @@ type Msg
     | MoveDown
     | NewDocument
     | ToggleEdit
+    | ToggleView
+    | ShowMarkdown
+    | ShowCompiled
     | NewLine
-    | DelLine
     | ToggleHelp
     | ToggleExport
     | ToggleAbout
@@ -80,11 +95,13 @@ model : Model
 model =
     { document = SelectList.singleton ""
     , editMode = False
+    , viewMode = Show Compiled
     , showHelp = False
     , showExport = False
     , showAbout = False
     , notifications = []
     , lastKey = Nothing
+    , clipboard = ""
     }
 
 
@@ -115,12 +132,39 @@ update msg model =
             { model | editMode = not model.editMode }
                 ! [ focusInput ]
 
+        ToggleView ->
+            let
+                newMode =
+                    case model.viewMode of
+                        Show _ ->
+                            Edit
+
+                        Edit ->
+                            Show Compiled
+            in
+                { model | viewMode = newMode }
+                    ! [ Cmd.none ]
+
+        ShowMarkdown ->
+            case model.viewMode of
+                Show _ ->
+                    { model | viewMode = Show Markdown }
+                        ! [ Cmd.none ]
+
+                _ ->
+                    model ! [ Cmd.none ]
+
+        ShowCompiled ->
+            case model.viewMode of
+                Show _ ->
+                    { model | viewMode = Show Compiled }
+                        ! [ Cmd.none ]
+
+                _ ->
+                    model ! [ Cmd.none ]
+
         NewLine ->
             newLine model ! [ Cmd.none ]
-
-        DelLine ->
-            { model | document = SelectList.removeCurrent model.document }
-                ! [ Cmd.none ]
 
         MoveUp ->
             move -1 model
@@ -174,10 +218,9 @@ update msg model =
         SaveToLocalStorage ->
             { model | notifications = Saved :: model.notifications }
                 ! [ Cmd.batch
-                        [ model.document
-                            |> serialize
-                            |> (,) "document"
-                            |> localStorageSet
+                        [ localStorageSet <|
+                            LocalStorageItem "document" <|
+                                (Just << serialize) model.document
                         , notificationTimer Saved
                         ]
                   ]
@@ -240,22 +283,58 @@ update msg model =
                             { modelLastKeyReset
                                 | document =
                                     SelectList.removeCurrent model.document
+                                , clipboard = SelectList.current model.document
                             }
                                 ! [ Cmd.none ]
                         else
                             { modelLastKeyReset | lastKey = Just 68 } ! [ Cmd.none ]
 
+                    -- y (yank)
+                    89 ->
+                        if not model.editMode then
+                            { modelLastKeyReset | clipboard = SelectList.current model.document }
+                                ! [ Cmd.none ]
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
+
                     -- i (edit mode on)
                     73 ->
                         if not model.editMode then
-                            { modelLastKeyReset | editMode = True }
+                            { modelLastKeyReset | editMode = True, viewMode = Edit }
                                 ! [ focusInput ]
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
+
+                    -- o (edit new line)
+                    79 ->
+                        if not model.editMode then
+                            newLine { modelLastKeyReset | editMode = True } ! [ focusInput ]
+                        else
+                            modelLastKeyReset ! [ Cmd.none ]
+
+                    -- p (paste)
+                    80 ->
+                        if not model.editMode then
+                            { model
+                                | document =
+                                    model.document
+                                        |> SelectList.append model.clipboard
+                                        |> SelectList.next
+                            }
+                                ! [ Cmd.none ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- Esc (edit mode off)
                     27 ->
-                        { modelLastKeyReset | editMode = False } ! [ Cmd.none ]
+                        if model.lastKey == Just 27 then
+                            { modelLastKeyReset | viewMode = Show Compiled } ! [ Cmd.none ]
+                        else
+                            { modelLastKeyReset
+                                | lastKey = Just 27
+                                , editMode = False
+                            }
+                                ! [ Cmd.none ]
 
                     _ ->
                         modelLastKeyReset ! [ Cmd.none ]
@@ -323,7 +402,7 @@ view : Model -> Html Msg
 view model =
     div
         []
-        [ viewHeader model.notifications
+        [ viewHeader model
         , viewExportModal model.showExport model.document
         , viewHelpModal model.showHelp
         , viewAboutModal model.showAbout
@@ -331,17 +410,61 @@ view model =
         ]
 
 
-viewHeader : List Notification -> Html Msg
-viewHeader notifications =
+viewHeader : Model -> Html Msg
+viewHeader model =
     div [ Style.header ]
-        [ span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
-        , a [ Style.button, onClick NewDocument ] [ text "New Document" ]
-        , a [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
-        , a [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
-        , a [ Style.button, onClick ToggleEdit ] [ text "Edit Mode" ]
-        , a [ Style.button, onClick ToggleHelp ] [ text "Help" ]
-        , span [ Style.headerTitle ] <| List.map viewNotification notifications
-        ]
+        (Maybe.Extra.values
+            [ Just <| span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
+            , Just <| button [ Style.button, onClick NewDocument ] [ text "New Document" ]
+            , Just <| button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
+            , Just <| button [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
+            , Just <|
+                button
+                    (Maybe.Extra.values
+                        [ Just <| Style.button
+                        , Just <| onClick ToggleView
+                        , ifShowMode model <| Style.highlight
+                        ]
+                    )
+                    [ text "Toggle Mode" ]
+            , ifShowMode model <|
+                button
+                    (Maybe.Extra.values
+                        [ Just <| Style.button
+                        , Just <| onClick ShowCompiled
+                        , if model.viewMode == Show Compiled then
+                            Just <| Style.highlight
+                          else
+                            Nothing
+                        ]
+                    )
+                    [ text "Compiled" ]
+            , ifShowMode model <|
+                button
+                    (Maybe.Extra.values
+                        [ Just <| Style.button
+                        , Just <| onClick ShowMarkdown
+                        , if model.viewMode == Show Markdown then
+                            Just <| Style.highlight
+                          else
+                            Nothing
+                        ]
+                    )
+                    [ text "Raw" ]
+            , Just <| button [ Style.button, onClick ToggleHelp ] [ text "Help" ]
+            , Just <| span [ Style.headerTitle ] <| List.map viewNotification model.notifications
+            ]
+        )
+
+
+ifShowMode : { r | viewMode : ViewMode } -> a -> Maybe a
+ifShowMode { viewMode } value =
+    case viewMode of
+        Show _ ->
+            Just value
+
+        otherwise ->
+            Nothing
 
 
 viewNotification : Notification -> Html Msg
@@ -360,21 +483,30 @@ viewHelpModal show =
         keys =
             [ ( "j", "Move down" )
             , ( "k", "Move up" )
-            , ( "d (twice)", "Delete line" )
+            , ( "d 2x", "Delete line" )
+            , ( "p", "Paste line" )
+            , ( "o", "New line" )
             , ( "i", "Switch to edit mode" )
             , ( "Esc", "Exit edit mode" )
+            , ( "Esc 2x", "Switch to view mode" )
             ]
 
         content =
-            table [] <|
-                List.map
-                    (\( key, command ) ->
-                        tr []
-                            [ td [] [ text key ]
-                            , td [] [ text command ]
-                            ]
-                    )
-                    keys
+            div []
+                [ text "I tried to emulate Vim behaviour so these hotkeys might seem familiar."
+                , hr [] []
+                , table
+                    []
+                  <|
+                    List.map
+                        (\( key, command ) ->
+                            tr []
+                                [ td [ Style.divide2 ] [ text key ]
+                                , td [ Style.divide2 ] [ text command ]
+                                ]
+                        )
+                        keys
+                ]
 
         footer =
             text ""
@@ -457,6 +589,43 @@ viewModal title show closeMsg content footer =
 
 viewTextArea : Model -> Html Msg
 viewTextArea model =
+    case model.viewMode of
+        Show Compiled ->
+            viewCompiledMode model
+
+        Show Markdown ->
+            viewMarkdownMode model
+
+        Edit ->
+            viewEditMode model
+
+
+viewCompiledMode : Model -> Html Msg
+viewCompiledMode model =
+    div
+        [ Style.line ]
+        [ viewPointer False
+        , SelectList.toList model.document
+            |> String.join "\n"
+            |> toHtml
+        ]
+
+
+viewMarkdownMode : Model -> Html Msg
+viewMarkdownMode model =
+    div
+        [ Style.line ]
+        [ viewPointer False
+        , pre []
+            [ SelectList.toList model.document
+                |> String.join "\n"
+                |> text
+            ]
+        ]
+
+
+viewEditMode : Model -> Html Msg
+viewEditMode model =
     div []
         [ div
             [ Style.line ]
@@ -481,7 +650,7 @@ viewTextArea model =
                         ]
                         []
                 else
-                    toHtml current
+                    text current
             ]
         , div
             [ Style.line ]
@@ -496,13 +665,15 @@ viewTextArea model =
 viewPointer : Bool -> Html Msg
 viewPointer isSelected =
     div
-        ([ Style.pointer ]
-            ++ if isSelected then
+        (List.concat
+            [ [ Style.pointer ]
+            , if isSelected then
                 [ id "pointer", Style.selected ]
-               else
+              else
                 [ Style.deselected ]
+            ]
         )
-        [ text " " ]
+        []
 
 
 toHtml : String -> Html Msg
