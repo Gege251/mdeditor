@@ -1,7 +1,6 @@
 port module Main exposing (..)
 
 import Dom
-import Html
 import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Attributes
@@ -14,7 +13,6 @@ import Keyboard exposing (KeyCode)
 import Process
 import Task
 import Base64
-import Dict exposing (Dict, fromList)
 import FileReader exposing (NativeFile)
 import Json.Decode as Decode exposing (Value)
 import Json.Decode.Pipeline as Pipeline
