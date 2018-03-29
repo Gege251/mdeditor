@@ -10,16 +10,11 @@ appName =
     "Markdown Editor 0.0.1"
 
 
-type ViewMode
-    = Markdown
-    | Compiled
-
-
 type alias Model =
     { document : SelectList String
     , insertMode : Bool
     , editMode : Bool
-    , viewMode : ViewMode
+    , compiledView : Bool
     , visibleModal : Modal
     , notifications : List Notification
     , lastKey : Maybe KeyCode
@@ -36,8 +31,7 @@ type Msg
     | NewDocument
     | ToggleInsert
     | ToggleEdit
-    | ShowMarkdown
-    | ShowCompiled
+    | ToggleView
     | NewLine
     | ToggleModal Modal
     | NotificationFade Notification

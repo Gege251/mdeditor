@@ -35,12 +35,12 @@ port localStorageRemove : String -> Cmd msg
 port onLocalStorageResponse : (Value -> msg) -> Sub msg
 
 
-initmodel : Model
-initmodel =
+initModel : Model
+initModel =
     { document = SelectList.singleton ""
     , insertMode = False
     , editMode = False
-    , viewMode = Compiled
+    , compiledView = True
     , visibleModal = NoModal
     , notifications = []
     , lastKey = Nothing
@@ -50,7 +50,7 @@ initmodel =
 
 init : ( Model, Cmd Msg )
 init =
-    initmodel ! [ localStorageGet "document" ]
+    initModel ! [ localStorageGet "document" ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -81,12 +81,8 @@ update msg model =
             { model | editMode = not model.editMode }
                 ! [ Cmd.none ]
 
-        ShowMarkdown ->
-            { model | viewMode = Markdown }
-                ! [ Cmd.none ]
-
-        ShowCompiled ->
-            { model | viewMode = Compiled }
+        ToggleView ->
+            { model | compiledView = not model.compiledView }
                 ! [ Cmd.none ]
 
         NewLine ->
@@ -324,43 +320,28 @@ viewHeader model =
             (Maybe.Extra.values
                 [ Just <| Style.button
                 , Just <| onClick ToggleEdit
-                , ifShowMode model <| Style.highlight
+                , if model.editMode then
+                    (Just Style.highlight)
+                  else
+                    Nothing
                 ]
             )
-            [ text "Toggle Mode" ]
+            [ text "Edit Mode"
+            ]
         , button
             (Maybe.Extra.values
                 [ Just <| Style.button
-                , Just <| onClick ShowCompiled
-                , if model.viewMode == Markdown then
-                    Just <| Style.highlight
+                , Just <| onClick ToggleView
+                , if model.compiledView then
+                    (Just Style.highlight)
                   else
                     Nothing
                 ]
             )
             [ text "Compiled" ]
-        , button
-            (Maybe.Extra.values
-                [ Just <| Style.button
-                , Just <| onClick ShowMarkdown
-                , if model.viewMode == Markdown then
-                    Just <| Style.highlight
-                  else
-                    Nothing
-                ]
-            )
-            [ text "Raw" ]
         , button [ Style.button, onClick (ToggleModal Help) ] [ text "Help" ]
         , span [ Style.headerTitle ] <| List.map viewNotification model.notifications
         ]
-
-
-ifShowMode : { r | editMode : Bool } -> a -> Maybe a
-ifShowMode { editMode } value =
-    if editMode then
-        Just value
-    else
-        Nothing
 
 
 viewNotification : Notification -> Html Msg
@@ -375,17 +356,17 @@ viewNotification notification =
 
 viewTextArea : Model -> Html Msg
 viewTextArea model =
-    case ( model.editMode, model.viewMode ) of
-        ( True, Compiled ) ->
+    case ( model.editMode, model.compiledView ) of
+        ( True, True ) ->
             viewCompiledEditMode model
 
-        ( True, Markdown ) ->
+        ( True, False ) ->
             viewEditMode model
 
-        ( False, Compiled ) ->
+        ( False, True ) ->
             viewCompiledMode model
 
-        ( False, Markdown ) ->
+        ( False, False ) ->
             viewMarkdownMode model
 
 
