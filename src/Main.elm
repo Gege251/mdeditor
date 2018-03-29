@@ -35,7 +35,7 @@ port onLocalStorageResponse : (Value -> msg) -> Sub msg
 
 type ViewMode
     = Show ShowMode
-    | Edit
+    | Edit ShowMode
 
 
 type ShowMode
@@ -135,9 +135,9 @@ update msg model =
                 newMode =
                     case model.viewMode of
                         Show _ ->
-                            Edit
+                            Edit Compiled
 
-                        Edit ->
+                        Edit _ ->
                             Show Compiled
             in
                 { model | viewMode = newMode }
@@ -149,8 +149,9 @@ update msg model =
                     { model | viewMode = Show Markdown }
                         ! [ Cmd.none ]
 
-                _ ->
-                    model ! [ Cmd.none ]
+                Edit _ ->
+                    { model | viewMode = Edit Markdown }
+                        ! [ Cmd.none ]
 
         ShowCompiled ->
             case model.viewMode of
@@ -158,8 +159,9 @@ update msg model =
                     { model | viewMode = Show Compiled }
                         ! [ Cmd.none ]
 
-                _ ->
-                    model ! [ Cmd.none ]
+                Edit _ ->
+                    { model | viewMode = Edit Compiled }
+                        ! [ Cmd.none ]
 
         NewLine ->
             newLine model ! [ Cmd.none ]
@@ -298,7 +300,7 @@ update msg model =
                     -- i (edit mode on)
                     73 ->
                         if not model.editMode then
-                            { modelLastKeyReset | editMode = True, viewMode = Edit }
+                            { modelLastKeyReset | editMode = True, viewMode = Edit Compiled }
                                 ! [ focusInput ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
@@ -411,48 +413,43 @@ view model =
 viewHeader : Model -> Html Msg
 viewHeader model =
     div [ Style.header ]
-        (Maybe.Extra.values
-            [ Just <| span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
-            , Just <| button [ Style.button, onClick NewDocument ] [ text "New Document" ]
-            , Just <| button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
-            , Just <| button [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
-            , Just <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ToggleView
-                        , ifShowMode model <| Style.highlight
-                        ]
-                    )
-                    [ text "Toggle Mode" ]
-            , ifShowMode model <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ShowCompiled
-                        , if model.viewMode == Show Compiled then
-                            Just <| Style.highlight
-                          else
-                            Nothing
-                        ]
-                    )
-                    [ text "Compiled" ]
-            , ifShowMode model <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ShowMarkdown
-                        , if model.viewMode == Show Markdown then
-                            Just <| Style.highlight
-                          else
-                            Nothing
-                        ]
-                    )
-                    [ text "Raw" ]
-            , Just <| button [ Style.button, onClick ToggleHelp ] [ text "Help" ]
-            , Just <| span [ Style.headerTitle ] <| List.map viewNotification model.notifications
-            ]
-        )
+        [ span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
+        , button [ Style.button, onClick NewDocument ] [ text "New Document" ]
+        , button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
+        , button [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
+        , button
+            (Maybe.Extra.values
+                [ Just <| Style.button
+                , Just <| onClick ToggleView
+                , ifShowMode model <| Style.highlight
+                ]
+            )
+            [ text "Toggle Mode" ]
+        , button
+            (Maybe.Extra.values
+                [ Just <| Style.button
+                , Just <| onClick ShowCompiled
+                , if model.viewMode == Show Compiled || model.viewMode == Edit Compiled then
+                    Just <| Style.highlight
+                  else
+                    Nothing
+                ]
+            )
+            [ text "Compiled" ]
+        , button
+            (Maybe.Extra.values
+                [ Just <| Style.button
+                , Just <| onClick ShowMarkdown
+                , if model.viewMode == Show Markdown || model.viewMode == Edit Markdown then
+                    Just <| Style.highlight
+                  else
+                    Nothing
+                ]
+            )
+            [ text "Raw" ]
+        , button [ Style.button, onClick ToggleHelp ] [ text "Help" ]
+        , span [ Style.headerTitle ] <| List.map viewNotification model.notifications
+        ]
 
 
 ifShowMode : { r | viewMode : ViewMode } -> a -> Maybe a
@@ -594,13 +591,27 @@ viewTextArea model =
         Show Markdown ->
             viewMarkdownMode model
 
-        Edit ->
+        Edit Compiled ->
+            viewCompiledEditMode model
+
+        Edit Markdown ->
             viewEditMode model
 
 
 viewCompiledMode : Model -> Html Msg
 viewCompiledMode model =
     div
+        [ Style.line ]
+        [ viewPointer False
+        , SelectList.toList model.document
+            |> String.join "\n"
+            |> toHtml
+        ]
+
+
+viewCompiledEditMode : Model -> Html Msg
+viewCompiledEditMode model =
+    textarea
         [ Style.line ]
         [ viewPointer False
         , SelectList.toList model.document
