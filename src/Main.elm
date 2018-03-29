@@ -45,7 +45,7 @@ type ShowMode
 
 type alias Model =
     { document : SelectList String
-    , editMode : Bool
+    , insertMode : Bool
     , viewMode : ViewMode
     , showHelp : Bool
     , showExport : Bool
@@ -59,6 +59,7 @@ type alias Model =
 type Msg
     = NoOp
     | InputMD String
+    | InputRaw String
     | MoveUp
     | MoveDown
     | NewDocument
@@ -92,7 +93,7 @@ type alias LocalStorageItem =
 model : Model
 model =
     { document = SelectList.singleton ""
-    , editMode = False
+    , insertMode = False
     , viewMode = Show Compiled
     , showHelp = False
     , showExport = False
@@ -126,8 +127,15 @@ update msg model =
             }
                 ! [ Cmd.none ]
 
+        InputRaw raw ->
+            { model
+                | document =
+                    Maybe.withDefault (SelectList.singleton "") (deserialize raw)
+            }
+                ! [ Cmd.none ]
+
         ToggleEdit ->
-            { model | editMode = not model.editMode }
+            { model | insertMode = not model.insertMode }
                 ! [ focusInput ]
 
         ToggleView ->
@@ -265,14 +273,14 @@ update msg model =
 
                     -- j (move down)
                     74 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             move 1 modelLastKeyReset
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- k (move up)
                     75 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             move -1 modelLastKeyReset
                         else
                             modelLastKeyReset ! [ Cmd.none ]
@@ -291,7 +299,7 @@ update msg model =
 
                     -- y (yank)
                     89 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             { modelLastKeyReset | clipboard = SelectList.current model.document }
                                 ! [ Cmd.none ]
                         else
@@ -299,22 +307,22 @@ update msg model =
 
                     -- i (edit mode on)
                     73 ->
-                        if not model.editMode then
-                            { modelLastKeyReset | editMode = True, viewMode = Edit Compiled }
+                        if not model.insertMode then
+                            { modelLastKeyReset | insertMode = True, viewMode = Edit Compiled }
                                 ! [ focusInput ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- o (edit new line)
                     79 ->
-                        if not model.editMode then
-                            newLine { modelLastKeyReset | editMode = True } ! [ focusInput ]
+                        if not model.insertMode then
+                            newLine { modelLastKeyReset | insertMode = True } ! [ focusInput ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- p (paste)
                     80 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             { model
                                 | document =
                                     model.document
@@ -332,7 +340,7 @@ update msg model =
                         else
                             { modelLastKeyReset
                                 | lastKey = Just 27
-                                , editMode = False
+                                , insertMode = False
                             }
                                 ! [ Cmd.none ]
 
@@ -368,7 +376,7 @@ move amount model =
 
 newLine : Model -> Model
 newLine model =
-    if model.editMode then
+    if model.insertMode then
         { model | document = SelectList.append "" model.document |> SelectList.next }
     else
         model
@@ -403,11 +411,17 @@ view model =
     div
         []
         [ viewHeader model
+        , viewHeaderSpacer
         , viewExportModal model.showExport model.document
         , viewHelpModal model.showHelp
         , viewAboutModal model.showAbout
         , viewTextArea model
         ]
+
+
+viewHeaderSpacer : Html Msg
+viewHeaderSpacer =
+    div [ Style.headerSpacer ] []
 
 
 viewHeader : Model -> Html Msg
@@ -609,14 +623,13 @@ viewCompiledMode model =
         ]
 
 
-viewCompiledEditMode : Model -> Html Msg
-viewCompiledEditMode model =
-    textarea
+viewEditMode : Model -> Html Msg
+viewEditMode model =
+    div
         [ Style.line ]
         [ viewPointer False
-        , SelectList.toList model.document
-            |> String.join "\n"
-            |> toHtml
+        , textarea [ Style.textArea, onInput InputRaw ]
+            [ text (serialize model.document) ]
         ]
 
 
@@ -633,8 +646,8 @@ viewMarkdownMode model =
         ]
 
 
-viewEditMode : Model -> Html Msg
-viewEditMode model =
+viewCompiledEditMode : Model -> Html Msg
+viewCompiledEditMode model =
     div []
         [ div
             [ Style.line ]
@@ -650,7 +663,7 @@ viewEditMode model =
                 current =
                     SelectList.current model.document
               in
-                if model.editMode then
+                if model.insertMode then
                     input
                         [ Style.inputField
                         , id "lineinput"
@@ -688,7 +701,8 @@ viewPointer isSelected =
 toHtml : String -> Html Msg
 toHtml markdown =
     Markdown.toHtml
-        [ Html.Attributes.style
+        [ Html.Attributes.class "markdown-body"
+        , Html.Attributes.style
             [ ( "display", "inline" )
             , ( "width", "100%" )
             ]
