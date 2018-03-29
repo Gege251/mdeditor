@@ -1,5 +1,6 @@
 // @format
 import 'sanitize.css';
+import 'github-markdown-css';
 import Elm from './Main.elm';
 
 const app = Elm.Main.embed(document.getElementById('main'));

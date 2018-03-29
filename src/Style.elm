@@ -75,13 +75,21 @@ inputField =
 
 header =
     css
-        [ backgroundColor palette.c4 ]
+        [ position fixed
+        , height (Css.rem 1.7)
+        , width (pct 100)
+        , backgroundColor palette.c4
+        ]
+
+
+headerSpacer =
+    css [ height (Css.rem 1.7) ]
 
 
 headerTitle =
     css
         [ fonts.basic
-        , fontSize (em 0.7)
+        , fontSize (Css.rem 0.7)
         , padding2 (px 0) (em 1.5)
         ]
 
@@ -166,3 +174,11 @@ centered =
 
 highlight =
     css [ important <| backgroundColor (Mixers.lighten 40 palette.c3) ]
+
+
+textArea =
+    css
+        [ width (pct 100)
+        , border (px 0)
+        , height (calc (Css.vh 100) minus (Css.rem 1.7))
+        ]

@@ -8,14 +8,16 @@ import Html.Styled.Events exposing (..)
 import Maybe.Extra
 import Style
 import Markdown
-import SelectList exposing (SelectList)
 import Keyboard exposing (KeyCode)
+import SelectList exposing (SelectList)
 import Process
 import Task
-import Base64
 import FileReader exposing (NativeFile)
 import Json.Decode as Decode exposing (Value)
 import Json.Decode.Pipeline as Pipeline
+import Utils exposing (..)
+import Modals exposing (..)
+import Model exposing (..)
 
 
 port scrollToId : String -> Cmd msg
@@ -33,70 +35,13 @@ port localStorageRemove : String -> Cmd msg
 port onLocalStorageResponse : (Value -> msg) -> Sub msg
 
 
-type ViewMode
-    = Show ShowMode
-    | Edit
-
-
-type ShowMode
-    = Markdown
-    | Compiled
-
-
-type alias Model =
-    { document : SelectList String
-    , editMode : Bool
-    , viewMode : ViewMode
-    , showHelp : Bool
-    , showExport : Bool
-    , showAbout : Bool
-    , notifications : List Notification
-    , lastKey : Maybe KeyCode
-    , clipboard : String
-    }
-
-
-type Msg
-    = NoOp
-    | InputMD String
-    | MoveUp
-    | MoveDown
-    | NewDocument
-    | ToggleEdit
-    | ToggleView
-    | ShowMarkdown
-    | ShowCompiled
-    | NewLine
-    | ToggleHelp
-    | ToggleExport
-    | ToggleAbout
-    | NotificationFade Notification
-    | ImportMD (List NativeFile)
-    | OnFileLoaded (Result FileReader.Error String)
-    | KeyDown KeyCode
-    | SaveToLocalStorage
-    | OnLocalStorageResponse LocalStorageItem
-
-
-type Notification
-    = Saved
-    | Imported
-
-
-type alias LocalStorageItem =
-    { key : String
-    , value : Maybe String
-    }
-
-
-model : Model
-model =
+initModel : Model
+initModel =
     { document = SelectList.singleton ""
+    , insertMode = False
     , editMode = False
-    , viewMode = Show Compiled
-    , showHelp = False
-    , showExport = False
-    , showAbout = False
+    , compiledView = True
+    , visibleModal = NoModal
     , notifications = []
     , lastKey = Nothing
     , clipboard = ""
@@ -105,12 +50,7 @@ model =
 
 init : ( Model, Cmd Msg )
 init =
-    model ! [ localStorageGet "document" ]
-
-
-appName : String
-appName =
-    "Markdown Editor 0.0.1"
+    initModel ! [ localStorageGet "document" ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -126,40 +66,24 @@ update msg model =
             }
                 ! [ Cmd.none ]
 
-        ToggleEdit ->
-            { model | editMode = not model.editMode }
+        InputRaw raw ->
+            { model
+                | document =
+                    Maybe.withDefault (SelectList.singleton "") (deserialize raw)
+            }
+                ! [ Cmd.none ]
+
+        ToggleInsert ->
+            { model | insertMode = not model.insertMode }
                 ! [ focusInput ]
 
+        ToggleEdit ->
+            { model | editMode = not model.editMode }
+                ! [ Cmd.none ]
+
         ToggleView ->
-            let
-                newMode =
-                    case model.viewMode of
-                        Show _ ->
-                            Edit
-
-                        Edit ->
-                            Show Compiled
-            in
-                { model | viewMode = newMode }
-                    ! [ Cmd.none ]
-
-        ShowMarkdown ->
-            case model.viewMode of
-                Show _ ->
-                    { model | viewMode = Show Markdown }
-                        ! [ Cmd.none ]
-
-                _ ->
-                    model ! [ Cmd.none ]
-
-        ShowCompiled ->
-            case model.viewMode of
-                Show _ ->
-                    { model | viewMode = Show Compiled }
-                        ! [ Cmd.none ]
-
-                _ ->
-                    model ! [ Cmd.none ]
+            { model | compiledView = not model.compiledView }
+                ! [ Cmd.none ]
 
         NewLine ->
             newLine model ! [ Cmd.none ]
@@ -173,14 +97,11 @@ update msg model =
         NewDocument ->
             { model | document = SelectList.singleton "" } ! [ Cmd.none ]
 
-        ToggleHelp ->
-            { model | showHelp = not model.showHelp } ! [ Cmd.none ]
-
-        ToggleExport ->
-            { model | showExport = not model.showExport } ! [ Cmd.none ]
-
-        ToggleAbout ->
-            { model | showAbout = not model.showAbout } ! [ Cmd.none ]
+        ToggleModal modal ->
+            if model.visibleModal == modal then
+                { model | visibleModal = NoModal } ! [ Cmd.none ]
+            else
+                { model | visibleModal = modal } ! [ Cmd.none ]
 
         ImportMD files ->
             case files of
@@ -204,7 +125,7 @@ update msg model =
                     in
                         case newdoc of
                             Just document ->
-                                { model | document = document, showExport = False }
+                                { model | document = document, visibleModal = NoModal }
                                     ! [ Cmd.none ]
 
                             Nothing ->
@@ -263,14 +184,14 @@ update msg model =
 
                     -- j (move down)
                     74 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             move 1 modelLastKeyReset
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- k (move up)
                     75 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             move -1 modelLastKeyReset
                         else
                             modelLastKeyReset ! [ Cmd.none ]
@@ -289,7 +210,7 @@ update msg model =
 
                     -- y (yank)
                     89 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             { modelLastKeyReset | clipboard = SelectList.current model.document }
                                 ! [ Cmd.none ]
                         else
@@ -297,22 +218,22 @@ update msg model =
 
                     -- i (edit mode on)
                     73 ->
-                        if not model.editMode then
-                            { modelLastKeyReset | editMode = True, viewMode = Edit }
+                        if not model.insertMode then
+                            { modelLastKeyReset | insertMode = True, editMode = True }
                                 ! [ focusInput ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- o (edit new line)
                     79 ->
-                        if not model.editMode then
-                            newLine { modelLastKeyReset | editMode = True } ! [ focusInput ]
+                        if not model.insertMode then
+                            newLine { modelLastKeyReset | insertMode = True } ! [ focusInput ]
                         else
                             modelLastKeyReset ! [ Cmd.none ]
 
                     -- p (paste)
                     80 ->
-                        if not model.editMode then
+                        if not model.insertMode then
                             { model
                                 | document =
                                     model.document
@@ -326,11 +247,11 @@ update msg model =
                     -- Esc (edit mode off)
                     27 ->
                         if model.lastKey == Just 27 then
-                            { modelLastKeyReset | viewMode = Show Compiled } ! [ Cmd.none ]
+                            { modelLastKeyReset | editMode = False } ! [ Cmd.none ]
                         else
                             { modelLastKeyReset
                                 | lastKey = Just 27
-                                , editMode = False
+                                , insertMode = False
                             }
                                 ! [ Cmd.none ]
 
@@ -366,34 +287,10 @@ move amount model =
 
 newLine : Model -> Model
 newLine model =
-    if model.editMode then
+    if model.insertMode then
         { model | document = SelectList.append "" model.document |> SelectList.next }
     else
         model
-
-
-serialize : SelectList String -> String
-serialize document =
-    SelectList.toList document
-        |> String.join "\n"
-
-
-deserialize : String -> Maybe (SelectList String)
-deserialize text =
-    String.split "\n" text
-        |> SelectList.fromList
-
-
-mkDataURI : String -> String
-mkDataURI raw =
-    let
-        prefix =
-            "data:text/plain;base64,"
-
-        encoded =
-            Base64.encode raw
-    in
-        prefix ++ encoded
 
 
 view : Model -> Html Msg
@@ -401,68 +298,50 @@ view model =
     div
         []
         [ viewHeader model
-        , viewExportModal model.showExport model.document
-        , viewHelpModal model.showHelp
-        , viewAboutModal model.showAbout
+        , viewHeaderSpacer
+        , viewModal model.visibleModal model
         , viewTextArea model
         ]
+
+
+viewHeaderSpacer : Html Msg
+viewHeaderSpacer =
+    div [ Style.headerSpacer ] []
 
 
 viewHeader : Model -> Html Msg
 viewHeader model =
     div [ Style.header ]
-        (Maybe.Extra.values
-            [ Just <| span [ Style.headerTitle, onClick ToggleAbout ] [ text appName ]
-            , Just <| button [ Style.button, onClick NewDocument ] [ text "New Document" ]
-            , Just <| button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
-            , Just <| button [ Style.button, onClick ToggleExport ] [ text "Import/Export" ]
-            , Just <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ToggleView
-                        , ifShowMode model <| Style.highlight
-                        ]
-                    )
-                    [ text "Toggle Mode" ]
-            , ifShowMode model <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ShowCompiled
-                        , if model.viewMode == Show Compiled then
-                            Just <| Style.highlight
-                          else
-                            Nothing
-                        ]
-                    )
-                    [ text "Compiled" ]
-            , ifShowMode model <|
-                button
-                    (Maybe.Extra.values
-                        [ Just <| Style.button
-                        , Just <| onClick ShowMarkdown
-                        , if model.viewMode == Show Markdown then
-                            Just <| Style.highlight
-                          else
-                            Nothing
-                        ]
-                    )
-                    [ text "Raw" ]
-            , Just <| button [ Style.button, onClick ToggleHelp ] [ text "Help" ]
-            , Just <| span [ Style.headerTitle ] <| List.map viewNotification model.notifications
+        [ span [ Style.headerTitle, onClick (ToggleModal About) ] [ text appName ]
+        , button [ Style.button, onClick NewDocument ] [ text "New Document" ]
+        , button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
+        , button [ Style.button, onClick (ToggleModal ImportExport) ] [ text "Import/Export" ]
+        , button
+            (Maybe.Extra.values
+                [ Just <| Style.button
+                , Just <| onClick ToggleEdit
+                , if model.editMode then
+                    (Just Style.highlight)
+                  else
+                    Nothing
+                ]
+            )
+            [ text "Edit Mode"
             ]
-        )
-
-
-ifShowMode : { r | viewMode : ViewMode } -> a -> Maybe a
-ifShowMode { viewMode } value =
-    case viewMode of
-        Show _ ->
-            Just value
-
-        otherwise ->
-            Nothing
+        , button
+            (Maybe.Extra.values
+                [ Just <| Style.button
+                , Just <| onClick ToggleView
+                , if model.compiledView then
+                    (Just Style.highlight)
+                  else
+                    Nothing
+                ]
+            )
+            [ text "Compiled" ]
+        , button [ Style.button, onClick (ToggleModal Help) ] [ text "Help" ]
+        , span [ Style.headerTitle ] <| List.map viewNotification model.notifications
+        ]
 
 
 viewNotification : Notification -> Html Msg
@@ -475,127 +354,20 @@ viewNotification notification =
             text "Imported."
 
 
-viewHelpModal : Bool -> Html Msg
-viewHelpModal show =
-    let
-        keys =
-            [ ( "j", "Move down" )
-            , ( "k", "Move up" )
-            , ( "d 2x", "Delete line" )
-            , ( "p", "Paste line" )
-            , ( "o", "New line" )
-            , ( "i", "Switch to edit mode" )
-            , ( "Esc", "Exit edit mode" )
-            , ( "Esc 2x", "Switch to view mode" )
-            ]
-
-        content =
-            div []
-                [ text "I tried to emulate Vim behaviour so these hotkeys might seem familiar."
-                , hr [] []
-                , table
-                    []
-                  <|
-                    List.map
-                        (\( key, command ) ->
-                            tr []
-                                [ td [ Style.divide2 ] [ text key ]
-                                , td [ Style.divide2 ] [ text command ]
-                                ]
-                        )
-                        keys
-                ]
-
-        footer =
-            text ""
-    in
-        viewModal "Help" show ToggleHelp content footer
-
-
-viewAboutModal : Bool -> Html Msg
-viewAboutModal show =
-    let
-        content =
-            div []
-                [ h2 [] [ text appName ]
-                , div [] [ text "by Szabo Gergely" ]
-                , a [ href "https://github.com/gege251/mdeditor", target "_blank" ]
-                    [ text "https://github.com/gege251/mdeditor" ]
-                ]
-
-        footer =
-            text ""
-    in
-        viewModal appName show ToggleAbout content footer
-
-
-onFileChange : (List NativeFile -> Msg) -> Html.Styled.Attribute Msg
-onFileChange msg =
-    Html.Styled.Attributes.fromUnstyled (FileReader.onFileChange msg)
-
-
-viewExportModal : Bool -> SelectList String -> Html Msg
-viewExportModal show document =
-    let
-        content =
-            div [ Style.widthPx 300, Style.centered ]
-                [ text "Warning! If you import a new file, all your changes will be lost!"
-                ]
-
-        footer =
-            div []
-                [ label
-                    [ Style.button, Style.divide2 ]
-                    [ input
-                        [ type_ "file"
-                        , hidden True
-                        , onFileChange ImportMD
-                        , multiple False
-                        ]
-                        []
-                    , text "Import"
-                    ]
-                , a
-                    [ Style.button
-                    , Style.divide2
-                    , href ((serialize >> mkDataURI) document)
-                    , downloadAs "export.md"
-                    , onClick ToggleExport
-                    ]
-                    [ text "Export" ]
-                ]
-    in
-        viewModal "Import/Export" show ToggleExport content footer
-
-
-viewModal : String -> Bool -> Msg -> Html Msg -> Html Msg -> Html Msg
-viewModal title show closeMsg content footer =
-    if show then
-        div [ Style.overlay ]
-            [ div [ Style.modal ]
-                [ div [ Style.modalTitleBar ]
-                    [ span [ Style.modalCloseBtn, onClick closeMsg ] [ text "x" ]
-                    , span [ Style.modalTitle ] [ text title ]
-                    ]
-                , div [ Style.modalContent ] [ content ]
-                , div [ Style.modalFooter ] [ footer ]
-                ]
-            ]
-    else
-        text ""
-
-
 viewTextArea : Model -> Html Msg
 viewTextArea model =
-    case model.viewMode of
-        Show Compiled ->
+    case ( model.editMode, model.compiledView ) of
+        ( True, True ) ->
+            viewCompiledEditMode model
+
+        ( True, False ) ->
+            viewEditMode model
+
+        ( False, True ) ->
             viewCompiledMode model
 
-        Show Markdown ->
+        ( False, False ) ->
             viewMarkdownMode model
-
-        Edit ->
-            viewEditMode model
 
 
 viewCompiledMode : Model -> Html Msg
@@ -606,6 +378,16 @@ viewCompiledMode model =
         , SelectList.toList model.document
             |> String.join "\n"
             |> toHtml
+        ]
+
+
+viewEditMode : Model -> Html Msg
+viewEditMode model =
+    div
+        [ Style.line ]
+        [ viewPointer False
+        , textarea [ Style.textArea, onInput InputRaw ]
+            [ text (serialize model.document) ]
         ]
 
 
@@ -622,8 +404,8 @@ viewMarkdownMode model =
         ]
 
 
-viewEditMode : Model -> Html Msg
-viewEditMode model =
+viewCompiledEditMode : Model -> Html Msg
+viewCompiledEditMode model =
     div []
         [ div
             [ Style.line ]
@@ -639,7 +421,7 @@ viewEditMode model =
                 current =
                     SelectList.current model.document
               in
-                if model.editMode then
+                if model.insertMode then
                     input
                         [ Style.inputField
                         , id "lineinput"
@@ -677,7 +459,8 @@ viewPointer isSelected =
 toHtml : String -> Html Msg
 toHtml markdown =
     Markdown.toHtml
-        [ Html.Attributes.style
+        [ Html.Attributes.class "markdown-body"
+        , Html.Attributes.style
             [ ( "display", "inline" )
             , ( "width", "100%" )
             ]

@@ -1,0 +1,6 @@
+---
+applications:
+  - name: mdeditor
+    buildpack: staticfile_buildpack
+    path: ./dist
+  
