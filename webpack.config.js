@@ -41,6 +41,10 @@ module.exports = {
                 test : /\.css$/,
                 use  : ['style-loader', 'css-loader' ],
             },
+            {
+                test : /\.(svg|ttf|eot|woff|woff2)$/,
+                use  : 'file-loader',
+            }
         ],
 
         noParse : /\.elm$/,

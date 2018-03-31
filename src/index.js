@@ -1,6 +1,8 @@
 // @format
 import 'sanitize.css';
 import 'github-markdown-css';
+import './assets/css/fontawesome-all.css';
+import './assets/css/fa-brands.css';
 import Elm from './Main.elm';
 
 const app = Elm.Main.embed(document.getElementById('main'));

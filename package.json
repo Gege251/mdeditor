@@ -19,7 +19,7 @@
     "cross-env": "^5.1.4",
     "css-loader": "^0.28.10",
     "elm-webpack-loader": "^4.4.0",
-    "github-markdown-css": "^2.10.0",
+    "file-loader": "^1.1.11",
     "html-webpack-plugin": "^3.0.6",
     "serve": "^6.5.3",
     "style-loader": "^0.20.3",
@@ -28,6 +28,7 @@
     "webpack-dev-server": "^2.11.2"
   },
   "dependencies": {
+    "github-markdown-css": "^2.10.0",
     "sanitize.css": "^5.0.0"
   }
 }

@@ -4,8 +4,9 @@ import Html.Styled exposing (..)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (..)
 import Style
+import Style.Icons as Icons
 import Model exposing (..)
-import Utils exposing (..)
+import Utils
 
 
 modalContents : Modal -> Model -> ( String, Html Msg, Html Msg )
@@ -21,10 +22,18 @@ modalContents modal model =
 
                 content =
                     div []
-                        [ h2 [] [ text appName ]
-                        , div [] [ text "by Szabo Gergely" ]
-                        , a [ href "https://github.com/gege251/mdeditor", target "_blank" ]
-                            [ text "https://github.com/gege251/mdeditor" ]
+                        [ div []
+                            [ img
+                                [ Style.avatar, src "https://avatars2.githubusercontent.com/u/17127992?v=4" ]
+                                []
+                            ]
+                        , div [ Style.centered ]
+                            [ small [] [ text "A WYSISYG markdown editor in Elm." ]
+                            , div [] [ strong [] [ text "by Szabo Gergely" ] ]
+                            , br [] []
+                            , a [ href "https://github.com/gege251/mdeditor", target "_blank" ]
+                                [ Icons.github2x, text "gege251/mdeditor" ]
+                            ]
                         ]
 
                 footer =
@@ -87,20 +96,23 @@ modalContents modal model =
                             [ input
                                 [ type_ "file"
                                 , hidden True
-                                , onFileChange ImportMD
+                                , Utils.onFileChange ImportMD
                                 , multiple False
                                 ]
                                 []
+                            , Icons.upload
                             , text "Import"
                             ]
                         , a
                             [ Style.button
                             , Style.divide2
-                            , href ((serialize >> mkDataURI) model.document)
+                            , href ((Utils.serialize >> Utils.mkDataURI) model.document)
                             , downloadAs "export.md"
                             , onClick (ToggleModal ImportExport)
                             ]
-                            [ text "Export" ]
+                            [ Icons.download
+                            , text "Export"
+                            ]
                         ]
             in
                 ( title, content, footer )

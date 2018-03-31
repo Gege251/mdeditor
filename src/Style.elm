@@ -182,3 +182,8 @@ textArea =
         , border (px 0)
         , height (calc (Css.vh 100) minus (Css.rem 1.7))
         ]
+
+
+avatar =
+    css
+        [ float left, width (px 80), borderRadius (pct 50) ]

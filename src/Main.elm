@@ -7,6 +7,7 @@ import Html.Attributes
 import Html.Styled.Events exposing (..)
 import Maybe.Extra
 import Style
+import Style.Icons as Icons
 import Markdown
 import Keyboard exposing (KeyCode)
 import SelectList exposing (SelectList)
@@ -313,33 +314,26 @@ viewHeader : Model -> Html Msg
 viewHeader model =
     div [ Style.header ]
         [ span [ Style.headerTitle, onClick (ToggleModal About) ] [ text appName ]
-        , button [ Style.button, onClick NewDocument ] [ text "New Document" ]
-        , button [ Style.button, onClick SaveToLocalStorage ] [ text "Save in browser" ]
-        , button [ Style.button, onClick (ToggleModal ImportExport) ] [ text "Import/Export" ]
         , button
-            (Maybe.Extra.values
-                [ Just <| Style.button
-                , Just <| onClick ToggleEdit
-                , if model.editMode then
-                    (Just Style.highlight)
-                  else
-                    Nothing
-                ]
-            )
-            [ text "Edit Mode"
+            [ Style.button, onClick NewDocument ]
+            [ Icons.file, text "New" ]
+        , button
+            [ Style.button, onClick SaveToLocalStorage ]
+            [ Icons.save, text "Save" ]
+        , button
+            [ Style.button, onClick (ToggleModal ImportExport) ]
+            [ Icons.upload, text "Import/Export" ]
+        , button
+            [ Style.button
+            , onClick ToggleEdit
             ]
+            [ Icons.toggle model.editMode, text "Editing" ]
         , button
-            (Maybe.Extra.values
-                [ Just <| Style.button
-                , Just <| onClick ToggleView
-                , if model.compiledView then
-                    (Just Style.highlight)
-                  else
-                    Nothing
-                ]
-            )
-            [ text "Compiled" ]
-        , button [ Style.button, onClick (ToggleModal Help) ] [ text "Help" ]
+            [ Style.button
+            , onClick ToggleView
+            ]
+            [ Icons.toggle model.compiledView, text "Formatted" ]
+        , button [ Style.button, onClick (ToggleModal Help) ] [ Icons.questionCircle ]
         , span [ Style.headerTitle ] <| List.map viewNotification model.notifications
         ]
 
